@@ -162,7 +162,9 @@ class Walk:
         m = np.matrix([[1/(sum(m[i])) if m.item(i,j)==1.0 else 0 for j in range(len(m[i]))] for i in range(len(m))])
         return matrix_power(m,k).trace().item(0)
 
+
 class Matching:
+
     
     def remove_edge(G,e):
         G = get_copy(G)
@@ -179,25 +181,18 @@ class Matching:
     
     def is_computable(G):
         K = [G.subgraph(c).copy() for c in nx.connected_components(G)]
-        for g in K:
-            if len(g.edges()) > 1:
-                return False
-        return True
+        return all(len(g.edges()) <= 1 for g in K)
     
     
     def compute_matching(G):
         m = 1
         K = [G.subgraph(c).copy() for c in nx.connected_components(G)]
-        for g in K:
-            if len(g.edges()) == 1:
-                m *= 2
-        return m
+        return reduce((lambda x, y: x * y), (2 if len(g.edges()) == 1 else 1 for g in K))
     
     
     def calculate_wiener_hosoya(G):
         return reduce((lambda x, y: x * y), (len(G.subgraph(c)) for c in nx.connected_components(G)))
         
-    
     
     def hosoya(G):
         #connected component with the most edges
@@ -212,11 +207,6 @@ class Matching:
     
     
     def wiener_hosoya(G):
-        w2 = 0
         w1 = Path.wiener(G)
-        for e in G.edges:
-            if not (G.degree(e[0]) == 1 or G.degree(e[0]) == 1):
-                H = Matching.remove_edges(G,e)
-                w2 += Matching.calculate_wiener_hosoya(H)
-        return w1 + w2        
-        
+        return w1 + sum(0 if (G.degree(e[0]) == 1 or G.degree(e[1]) == 1) else Matching.calculate_wiener_hosoya(Matching.remove_edges(G,e)) for e in G.edges)
+               
