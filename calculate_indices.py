@@ -3,6 +3,11 @@ from networkx import algorithms
 from networkx.algorithms import isomorphism
 import networkx as nx
 import math
+import numpy as np
+from numpy.linalg import matrix_power
+import random
+from functools import reduce
+
 
 def get_copy(G):
     H = G.__class__()
@@ -120,3 +125,98 @@ class Path:
             for v1, v2 in isomorph.items():
                 paths_len += algorithms.shortest_path_length(G, v1, v2)
         return((paths_len*len(G))/(len(list(GM.isomorphisms_iter())) * 2))
+
+
+class Walk:
+
+
+    def all_paths_from_v(G,v,k):
+        paths = 0
+        for i in range(len(G)):
+            paths += all_simple_paths(G, v, i, cutoff=k) - all_simple_paths(G, v, i, cutoff=k-1) 
+        return paths
+    
+    
+    def path_walk_ratio1(G,k):
+        walks =  matrix_power(nx.to_numpy_matrix(G), k).sum(axis=1)
+        paths = [all_paths_from_v(G,v) for v in range(len(G))]
+        return sum(paths[i]/walks[i[0]] for i in range(len(G)))
+    
+
+    def path_walk_ratio2(G,k):
+        walks = matrix_power(nx.to_numpy_matrix(G), k).sum()
+        paths = sum(all_paths_from_v(G,v) for v in range(len(G)))
+        return paths/walks 
+    
+    
+    def number_of_patks_k(G,k):
+        return sum(all_paths_from_v(G,v) for v in range(len(G)))
+    
+    
+    def estrada(G,k):
+        return matrix_power(nx.to_numpy_matrix(G), k).trace()
+        
+        
+    def markov(G,k):
+        m = np.array(nx.to_numpy_matrix(G))
+        m = np.matrix([[1/(sum(m[i])) if m.item(i,j)==1.0 else 0 for j in range(len(m[i]))] for i in range(len(m))])
+        return matrix_power(m,k).trace().item(0)
+
+class Matching:
+    
+    def remove_edge(G,e):
+        G = get_copy(G)
+        G.remove_edge(*e) 
+        return G
+    
+    
+    def remove_edges(G,e):
+        G = get_copy(G)
+        G.remove_edges_from(list(G.edges(e[0])))
+        G.remove_edges_from(list(G.edges(e[1])))
+        return G
+    
+    
+    def is_computable(G):
+        K = [G.subgraph(c).copy() for c in nx.connected_components(G)]
+        for g in K:
+            if len(g.edges()) > 1:
+                return False
+        return True
+    
+    
+    def compute_matching(G):
+        m = 1
+        K = [G.subgraph(c).copy() for c in nx.connected_components(G)]
+        for g in K:
+            if len(g.edges()) == 1:
+                m *= 2
+        return m
+    
+    
+    def calculate_wiener_hosoya(G):
+        return reduce((lambda x, y: x * y), (len(G.subgraph(c)) for c in nx.connected_components(G)))
+        
+    
+    
+    def hosoya(G):
+        #connected component with the most edges
+        K = max([G.subgraph(c).copy() for c in nx.connected_components(G)],key=lambda x: len(x.edges()))
+        #edge of a central vertex
+        e = list(G.edges(nx.center(K)[0]))[0]
+        G_one_edge = Matching.remove_edge(G,e)
+        G_edges = Matching.remove_edges(G,e)
+        m1 = Matching.compute_matching(G_one_edge) if Matching.is_computable(G_one_edge) else Matching.hosoya(G_one_edge)
+        m2 = Matching.compute_matching(G_edges) if Matching.is_computable(G_edges) else Matching.hosoya(G_edges)
+        return m1 + m2
+    
+    
+    def wiener_hosoya(G):
+        w2 = 0
+        w1 = Path.wiener(G)
+        for e in G.edges:
+            if not (G.degree(e[0]) == 1 or G.degree(e[0]) == 1):
+                H = Matching.remove_edges(G,e)
+                w2 += Matching.calculate_wiener_hosoya(H)
+        return w1 + w2        
+        
